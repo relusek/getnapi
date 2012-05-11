@@ -137,7 +137,7 @@ sub getsubtitles{
    my $buf;
    my $data = 10485760;
 
-   $filename =~ /(.+)\.(\w\w\w)$/;
+   $filename =~ /(.+)\.(\w+)$/;
    my $name = $1;
    my $ext = $2;
    my $nazwa = "$name.txt";
