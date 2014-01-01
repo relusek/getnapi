@@ -1,21 +1,4 @@
 #!/usr/bin/perl
-#===============================================================================
-#
-#         FILE:  getnapi.pl
-#
-#        USAGE:  ./getnapi.pl  
-#
-#  DESCRIPTION:  
-#
-#      OPTIONS:  ---
-# REQUIREMENTS:  ---
-#         BUGS:  ---
-#        NOTES:  ---
-#      VERSION:  ????
-#      CREATED:  08/30/2010 10:54:17 M
-#     REVISION:  ????
-#===============================================================================
-
 use strict;
 use warnings;
 use Digest::MD5 qw(md5_hex);
@@ -28,25 +11,24 @@ use Getopt::Long;
 #==========MAIN PROGRAM
 #media filter
 my $filter = "(avi|wmv|mkv|rmvb|3gp|mp4|mpe?g)";
-
+#config
 my $Conf = {
     utf         => 0,
-    makesrt	=> 1,
-    removetxt	=> 0, 
-    force 	=> 0, 
-    debug 	=> 0,
+    makesrt => 1,
+    removetxt => 0, 
+    force   => 0, 
+    debug   => 0,
     test        => 0,   
-    saveconfig	=> 0,
-    once	=> 0,
-    cover 	=> 0,
+    saveconfig  => 0,
+    once  => 0,
+    cover   => 0,
     dirs        => [ ], 
 };
 
-####
 umask 022;
 my $help = 0;
 $|++;
-
+##test
 debug("GetOptions");
 GetOptions
 ( 
@@ -65,11 +47,8 @@ GetOptions
 my $ConfTmp = get_options();
 
 if (($ConfTmp)&&($Conf->{'once'}==0)){
-	$Conf = $ConfTmp; 
+  $Conf = $ConfTmp; 
 }   
-
-
-####
 
 if($Conf->{'saveconfig'}){
    save_options();   
@@ -137,7 +116,7 @@ sub getsubtitles{
    my $buf;
    my $data = 10485760;
 
-   $filename =~ /(.+)\.(\w+)$/;
+   $filename =~ /(.+)\.(\w\w\w)$/;
    my $name = $1;
    my $ext = $2;
    my $nazwa = "$name.txt";
@@ -164,16 +143,16 @@ sub getsubtitles{
       print $MYFILE $filek;
       close($MYFILE);
 
-	  if ($Conf->{cover}){
-	      my $url_cover = "http://www.napiprojekt.pl/okladka_pobierz.php?id=$md5&oceny=-1";
-	      my $cover = get($url_cover);
-	      my $cover_name = "$name.jpg";
-	      open($MYFILE, '>', $cover_name) or die "ERR: Cant write cover file!";
-    	      binmode $MYFILE;
-	      print $MYFILE $cover;
-    	      close($MYFILE);
-	  }
-   	
+    if ($Conf->{cover}){
+        my $url_cover = "http://www.napiprojekt.pl/okladka_pobierz.php?id=$md5&oceny=-1";
+        my $cover = get($url_cover);
+        my $cover_name = "$name.jpg";
+        open($MYFILE, '>', $cover_name) or die "ERR: Cant write cover file!";
+            binmode $MYFILE;
+        print $MYFILE $cover;
+            close($MYFILE);
+    }
+    
       qx(/usr/bin/7za x -y -so -piBlm8NTigvru0Jr0 napy.7z 2>/dev/null > "$nazwa" );
       debug("unlink napy.7z");
       unlink "napy.7z";
@@ -185,50 +164,38 @@ sub getsubtitles{
 
          debug("open $nazwa");
          open(FD,"<",$nazwa) or die $!;
-	 my @lines = <FD>;
- 	 close FD;
+   my @lines = <FD>;
+   close FD;
  
- 	 debug("read file");
-	 my $file = join("",@lines);
+   debug("read file");
+   my $file = join("",@lines);
 
       if ($Conf->{utf} && $check_utf !~ /UTF/) {
 
-	 my $from = "cp1250";
-	 my $to = "UTF-8";
-	 
-	 debug("from_to(file,$from,$to)");
-	 from_to($file,$from,$to);
+   my $from = "cp1250";
+   my $to = "UTF-8";
+   
+   debug("from_to(file,$from,$to)");
+   from_to($file,$from,$to);
       }
-	 
-        $file =~ s/\r\n$|\n$|\r$/\n/g; #end line to unix
-        $file =~ s/\{y:\w\}//gi; #tags {}
-        $file =~ s/\///gi; #/
-        $file =~ s/\<\w\>//gi; #tags <i>
-        $file =~ s/\<\\\w\>//gi; #tags <\i>
-        $file =~ s/\{C:.+\}//gi; #colors
-        $file =~ s/^\s*$//gi; #empty lines
 
-        if ($file eq "" ){
-                $file = ".....";
-        }
-
-
-
-	 debug("save $nazwa");
-	 open(FD,">",$nazwa);
-	 print FD $file;
-	 close(FD);
+   debug("save $nazwa");
+   open(FD,">",$nazwa);
+   print FD $file;
+   close(FD);
 
       if($Conf->{makesrt}){
          my $movierate = "25.00";
 
-	    my $fps = qx(/usr/bin/ffmpeg -i "$filename" 2>&1 | tr -s "\n" | grep Video | cut -d"," -f5 | cut -d" " -f2);
-	    chomp($fps);
-	    if($fps =~ /(\d\d\.*\d*)/){
+      my $fps = qx(/usr/bin/ffmpeg -i "$filename" 2>&1 | tr -s "\n" | grep Video | cut -d"," -f5 | cut -d" " -f2);
+#     my $fps = qx(/usr/bin/exiftool "$filename" -s | /bin/grep VideoFrameRate | /usr/bin/cut -d":" -f2 | tr -d " ");
+      chomp($fps);
+      if($fps =~ /(\d\d\.*\d*)/){
+#     if(($fps =~ /(\d\d\.\d\d\d)/)||($fps =~ /(\d\d\.\d\d)/)||($fps =~ /(\d\d)/)){
                $movierate = $1;
-		print "--INFO:-f:$fps-s:$movierate\t";
+    print "--INFO:-f:$fps-s:$movierate";
             }
-	    
+
          my $response = '';
          debug("sub2srt -f=$movierate --force \"$nazwa\" \"$name.srt\"");
          $response = qx(/usr/bin/sub2srt -f=$movierate --force "$nazwa" "$name.srt") if!$Conf->{test};
@@ -237,11 +204,17 @@ sub getsubtitles{
             if($Conf->{removetxt}){
                debug("unlink $nazwa");
                unlink $nazwa if!$Conf->{test};
+
+    $name =~ m|^(.*[/\\])([^/\\]+?)$|;
+#   sendEmail("relu\@simplusnet.pl", "localhost.mailing\@gmail.com", "$2", "subtitles for $2 downloaded" );
+    print "--INFO: email sended";
+#               print "--INFO: removed: '$nazwa'\n";
             }
+#            print "--INFO: written: \"$name.srt\"\n";
+         }else{
+#            print "--INFO: written: \"$nazwa\"\n";
          }
-         else{
-         }
-      }; # END MAKESRT
+      } # END MAKESRT
    } # END
    else{
       print "--INFO: No subs!";
@@ -290,4 +263,15 @@ sub get_options {
       return eval($retconf);
    };
    return undef;
+}
+
+sub sendEmail{
+  my ($to, $from, $subject, $message) = @_;
+  my $sendmail = '/usr/lib/sendmail';
+  open(MAIL, "|$sendmail -oi -t");
+    print MAIL "From: $from\n";
+    print MAIL "To: $to\n";
+    print MAIL "Subject: $subject\n\n";
+    print MAIL "$message\n";
+  close(MAIL);
 }

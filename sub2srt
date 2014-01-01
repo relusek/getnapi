@@ -19,10 +19,8 @@
 
 use strict;
 use utf8;
-my $version = "0.5.3s";
+my $version = "0.5.3u";
 
-#use open IN  => ':crlf';
-#use open OUT => ':utf8';
 use Getopt::Long;
 Getopt::Long::Configure("pass_through","no_ignore_case");
 my $help = 0;
@@ -104,14 +102,13 @@ open INFILE, "$infile" or die "Unable to open $infile for reading\n";
 
 open OUTFILE, ">$outfile" or die "Unable to open $outfile for writing\n";
 
-my $check_bom = qx(/usr/bin/file "$infile");
+#my $check_bom = qx(/usr/bin/file "$infile");
 
-if ($check_bom !~ /BOM/){
-	binmode OUTFILE, ':utf8';
-	print OUTFILE "\x{feff}";
-	#print OUTFILE "\x{efbbbf}";
-	binmode OUTFILE;
-}
+#if ($check_bom !~ /BOM/){
+binmode OUTFILE, ':utf8';
+print OUTFILE "\x{feff}";
+binmode OUTFILE;
+#}
  
 if ($format eq "subrip") {
 	conv_subrip();
@@ -127,17 +124,7 @@ elsif ($format eq "txtsub") {
 }
 elsif ($format eq "srt") {
 	print "Input file is already subviewer srt format.\n";
-
-	# Copy data from one file to another.
-	while(<INFILE>){
-
-		$_ =~ s/\{y:\w\}//gi; #tags {}
-	       	$_ =~ s/\///gi; #/
-	        $_ =~ s/\<\w\>//gi; #tags <i>
-	        $_ =~ s/\{C:.+\}//gi; #colors
-
-		print OUTFILE $_;
-	}
+	conv_srtrip();
 }
 elsif ($format eq "mpl2"){
 	conv_mpl2();
@@ -146,6 +133,51 @@ elsif ($format eq "mpl2"){
 close INFILE;
 close OUTFILE;
 
+sub conv_srtrip {
+        my $converted = 0;
+        my $failed = 0;
+        my $starttime  = 0;
+        my $endtime = 0;
+	my $line1;
+
+        while (my $line0 = <INFILE>) {
+            $line0 =~ s/[\n\r]*$//;
+
+            if($line0){
+    	    $line1 = <INFILE>;
+	        $line1 =~ s/[\n\r]*$//;
+
+                if ($line1 =~ m/^(\d\d\:\d\d\:\d\d\,\d\d\d)\s\-\-\>\s(\d\d\:\d\d\:\d\d\,\d\d\d)$/) {
+                        $starttime  = $1;
+                        $endtime = $2;
+
+                        my $text = <INFILE>;
+                        $text =~ s/[\n\r]*$//;
+                        my $empty = <INFILE>;
+                        $empty =~ s/[\n\r]*$// if ($empty);
+                        $text = "$text"."\n$empty" if ($empty);
+                        $converted++;
+
+                        print "  Subtitle #$converted: start: $starttime, end: $endtime, Text: $text\n" if ($debug);
+
+                        # convert line-ends
+                        $text =~ s/\[br\]/$le/g;
+
+                        write_srt($converted, $starttime, $endtime, $text);
+
+                } else {
+                        if (!$converted) {
+                                print "  Header line: $line1 ignored\n" if ($debug);
+                        } else {
+                                $failed++;
+                                print "  failed to convert: $line1\n" if ($debug);
+                        }
+                }
+	  }
+        }
+        print "$converted subtitles written\n" if (!$quiet);
+        print "$failed lines failed\n" if (!$quiet && $failed);
+}
 
 sub conv_tmplayer {
         my $converted = 0;
@@ -393,6 +425,10 @@ sub write_srt {
 	my $end = shift;
 	my $text = shift;
 
+	if (!$text){
+		$text = ".....";
+ 	}
+
         $text =~ s/\{y:\w\}//gi; #tags {}
         $text =~ s/\///gi; #/
         $text =~ s/\<\w\>//gi; #tags <i>
@@ -401,9 +437,7 @@ sub write_srt {
         $text =~ s/^\s*$//gi; #empty lines
 	
 
-	if ($text eq "" ){
-		$text = ".....";
-	}
+	
 	print OUTFILE "$nr$le";
 	print OUTFILE "$start --> $end$le";
 	print OUTFILE "$text$le";
